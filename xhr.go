@@ -24,6 +24,7 @@ func NewXHR(address string) (*XHR, error) {
 		Address:   address,
 		ServerID:  paddedRandomIntn(999),
 		SessionID: uniuri.New(),
+		Inbound: make(chan []byte),
 	}
 	xhr.TransportAddress = address + "/" + xhr.ServerID + "/" + xhr.SessionID
 	if err := xhr.Init(); err != nil {
