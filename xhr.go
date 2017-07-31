@@ -17,20 +17,24 @@ type XHR struct {
 	ServerID         string
 	SessionID        string
 	Inbound          chan []byte
+	Done             chan bool
 }
+
+var client = http.Client{Timeout: time.Second * 10}
 
 func NewXHR(address string) (*XHR, error) {
 	xhr := &XHR{
 		Address:   address,
 		ServerID:  paddedRandomIntn(999),
 		SessionID: uniuri.New(),
-		Inbound: make(chan []byte),
+		Inbound:   make(chan []byte),
+		Done:      make(chan bool, 1),
 	}
 	xhr.TransportAddress = address + "/" + xhr.ServerID + "/" + xhr.SessionID
 	if err := xhr.Init(); err != nil {
 		return nil, err
 	}
-	xhr.StartReading()
+	go xhr.StartReading()
 
 	return xhr, nil
 }
@@ -41,7 +45,7 @@ func (x *XHR) Init() error {
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -59,12 +63,17 @@ func (x *XHR) Init() error {
 	return nil
 }
 
+func (x *XHR) doneNotify() {
+	return
+}
+
 func (x *XHR) StartReading() {
-	go func() {
-		client := &http.Client{
-			Timeout: time.Minute,
-		}
-		for {
+	client := &http.Client{Timeout: time.Second * 30}
+	for {
+		select {
+		case <-x.Done:
+			return
+		default:
 			req, err := http.NewRequest("POST", x.TransportAddress+"/xhr", nil)
 			if err != nil {
 				log.Print(err)
@@ -101,7 +110,7 @@ func (x *XHR) StartReading() {
 				break
 			}
 		}
-	}()
+	}
 }
 
 func (x *XHR) ReadJSON(v interface{}) error {
@@ -134,6 +143,6 @@ func (x *XHR) WriteJSON(v interface{}) error {
 }
 
 func (x *XHR) Close() error {
-	// Unimplemented
+	x.Done <- true
 	return nil
 }
