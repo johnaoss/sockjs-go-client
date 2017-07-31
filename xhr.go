@@ -84,9 +84,9 @@ func (x *XHR) StartReading() {
 				log.Print(err)
 				continue
 			}
-			defer resp.Body.Close()
 
 			data, err := ioutil.ReadAll(resp.Body)
+			_ = resp.Body.Close()
 			if err != nil {
 				log.Print(err)
 				continue
