@@ -142,7 +142,6 @@ func (x *XHR) WriteJSON(v interface{}) error {
 	return nil
 }
 
-func (x *XHR) Close() error {
+func (x *XHR) Close() {
 	x.Done <- true
-	return nil
 }
