@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"fmt"
 )
 
 type XHR struct {
@@ -143,6 +144,10 @@ func (x *XHR) WriteJSON(v interface{}) error {
 }
 
 func (x *XHR) Close() error {
-	x.Done <- true
+	select {
+	case x.Done <- true:
+	default:
+		return fmt.Errorf("Error closing XHR")
+	}
 	return nil
 }
