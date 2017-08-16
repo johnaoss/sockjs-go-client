@@ -1,4 +1,4 @@
-package sockjs
+package sockjsclient
 
 type Info struct {
 	WebSocket    bool     `json:"websocket"`

@@ -1,4 +1,4 @@
-package sockjs
+package sockjsclient
 
 type Connection interface {
 	ReadJSON(interface{}) error

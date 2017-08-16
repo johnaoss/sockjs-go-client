@@ -1,15 +1,18 @@
-package sockjs
+package sockjsclient
 
 import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/dchest/uniuri"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
-	"fmt"
+
+	"github.com/dchest/uniuri"
+	"github.com/igm/sockjs-go/sockjs"
+	"sync"
 )
 
 type XHR struct {
@@ -19,6 +22,8 @@ type XHR struct {
 	SessionID        string
 	Inbound          chan []byte
 	Done             chan bool
+	sessionState     sockjs.SessionState
+	mu sync.RWMutex
 }
 
 var client = http.Client{Timeout: time.Second * 10}
@@ -30,6 +35,7 @@ func NewXHR(address string) (*XHR, error) {
 		SessionID: uniuri.New(),
 		Inbound:   make(chan []byte),
 		Done:      make(chan bool, 1),
+		sessionState: sockjs.SessionOpening,
 	}
 	xhr.TransportAddress = address + "/" + xhr.ServerID + "/" + xhr.SessionID
 	if err := xhr.Init(); err != nil {
@@ -60,6 +66,7 @@ func (x *XHR) Init() error {
 	if body[0] != 'o' {
 		return errors.New("Invalid initial message")
 	}
+	x.setSessionState(sockjs.SessionActive)
 
 	return nil
 }
@@ -102,6 +109,7 @@ func (x *XHR) StartReading() {
 				x.Inbound <- data[1:]
 			case 'c':
 				// Session closed
+				x.setSessionState(sockjs.SessionClosed)
 				var v []interface{}
 				if err := json.Unmarshal(data[1:], &v); err != nil {
 					log.Printf("Closing session: %s", err)
@@ -150,4 +158,16 @@ func (x *XHR) Close() error {
 		return fmt.Errorf("Error closing XHR")
 	}
 	return nil
+}
+
+func (x *XHR) GetSessionState() sockjs.SessionState {
+	x.mu.RLock()
+	defer x.mu.RUnlock()
+	return x.sessionState
+}
+
+func (x *XHR) setSessionState(state sockjs.SessionState) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	x.sessionState = state
 }

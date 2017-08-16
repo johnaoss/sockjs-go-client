@@ -1,4 +1,4 @@
-package sockjs
+package sockjsclient
 
 import (
 	"encoding/json"
