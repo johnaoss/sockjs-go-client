@@ -3,12 +3,13 @@ package sockjsclient
 import (
 	"encoding/json"
 	"errors"
-	"github.com/cenkalti/backoff"
-	"github.com/dchest/uniuri"
-	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
 	"sync"
+
+	"github.com/cenkalti/backoff"
+	"github.com/dchest/uniuri"
+	"github.com/gorilla/websocket"
 )
 
 type WebSocket struct {
@@ -20,15 +21,17 @@ type WebSocket struct {
 	Connection       *websocket.Conn
 	Inbound          chan []byte
 	Reconnected      chan struct{}
+	ConnectionLost   chan struct{}
 }
 
 func NewWebSocket(address string) (*WebSocket, error) {
 	ws := &WebSocket{
-		Address:     address,
-		ServerID:    paddedRandomIntn(999),
-		SessionID:   uniuri.New(),
-		Inbound:     make(chan []byte),
-		Reconnected: make(chan struct{}, 32),
+		Address:        address,
+		ServerID:       paddedRandomIntn(999),
+		SessionID:      uniuri.New(),
+		Inbound:        make(chan []byte),
+		Reconnected:    make(chan struct{}, 32),
+		ConnectionLost: make(chan struct{}, 1),
 	}
 
 	ws.TransportAddress = address + "/" + ws.ServerID + "/" + ws.SessionID + "/websocket"
@@ -40,7 +43,17 @@ func NewWebSocket(address string) (*WebSocket, error) {
 
 func (w *WebSocket) Loop() {
 	go func() {
+		connectionLost := false
 		err := backoff.Retry(func() error {
+			defer func() {
+				if !connectionLost {
+					select {
+					case w.ConnectionLost <- struct{}{}:
+						connectionLost = true
+					default:
+					}
+				}
+			}()
 			log.Printf("Starting a WebSocket connection to %s", w.TransportAddress)
 
 			ws, _, err := websocket.DefaultDialer.Dial(w.TransportAddress, http.Header{})
@@ -61,6 +74,7 @@ func (w *WebSocket) Loop() {
 			w.Connection = ws
 
 			w.Reconnected <- struct{}{}
+			connectionLost = false
 
 			for {
 				_, data, err := w.Connection.ReadMessage()

@@ -14,7 +14,8 @@ type Client struct {
 	ReadBufSize  int
 	WriteBufSize int
 
-	Reconnected chan struct{}
+	Reconnected    chan struct{}
+	ConnectionLost chan struct{}
 }
 
 func NewClient(address string) (*Client, error) {
@@ -41,6 +42,7 @@ func NewClient(address string) (*Client, error) {
 
 		client.Connection = ws
 		client.Reconnected = ws.Reconnected
+		client.ConnectionLost = ws.ConnectionLost
 	} else {
 		// XHR
 		client.Connection, err = NewXHR(address)
