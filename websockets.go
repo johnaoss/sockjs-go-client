@@ -5,11 +5,16 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/cenkalti/backoff"
 	"github.com/dchest/uniuri"
 	"github.com/gorilla/websocket"
+)
+
+var (
+	ErrClosedConnection = errors.New("use of closed network connection")
 )
 
 type WebSocket struct {
@@ -44,7 +49,7 @@ func NewWebSocket(address string) (*WebSocket, error) {
 func (w *WebSocket) Loop() {
 	go func() {
 		connectionLost := false
-		err := backoff.Retry(func() error {
+		backoff.Retry(func() (err error) {
 			defer func() {
 				if !connectionLost {
 					select {
@@ -52,6 +57,10 @@ func (w *WebSocket) Loop() {
 						connectionLost = true
 					default:
 					}
+				}
+				if err != nil && strings.Contains(err.Error(), "use of closed network connection") {
+					err = nil
+					close(w.Inbound)
 				}
 			}()
 			log.Printf("Starting a WebSocket connection to %s", w.TransportAddress)
@@ -106,16 +115,16 @@ func (w *WebSocket) Loop() {
 
 			return errors.New("Connection closed")
 		}, backoff.NewExponentialBackOff())
-		if err != nil {
-			log.Print(err)
-		}
 	}()
 
 	<-w.Reconnected
 }
 
 func (w *WebSocket) ReadJSON(v interface{}) error {
-	message := <-w.Inbound
+	message, ok := <-w.Inbound
+	if !ok {
+		return ErrClosedConnection
+	}
 	return json.Unmarshal(message, v)
 }
 
