@@ -2,16 +2,15 @@ package sockjsclient
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/dchest/uniuri"
 	"github.com/gorilla/websocket"
 )
 
@@ -19,16 +18,7 @@ var (
 	ErrClosedConnection = errors.New("use of closed network connection")
 )
 
-type ErrNoHeartbeat struct {
-	timeout time.Duration
-}
-
-func (err ErrNoHeartbeat) Error() string {
-	return fmt.Sprintf("No heartbeat was sent for the past %v", err.timeout)
-}
-
 type WebSocket struct {
-	sync.Mutex
 	Address          string
 	TransportAddress string
 	ServerID         string
@@ -42,11 +32,11 @@ type WebSocket struct {
 func NewWebSocket(address string) (*WebSocket, error) {
 	ws := &WebSocket{
 		Address:        address,
-		ServerID:       paddedRandomIntn(999),
-		SessionID:      uniuri.New(),
+		ServerID:       GenerateServerID(),
+		SessionID:      GenerateSessionID(),
 		Inbound:        make(chan []byte),
 		Reconnected:    make(chan struct{}, 32),
-		ConnectionLost: make(chan struct{}, 1),
+		ConnectionLost: make(chan struct{}),
 	}
 
 	ws.TransportAddress = address + "/" + ws.ServerID + "/" + ws.SessionID + "/websocket"
@@ -141,7 +131,6 @@ func (w *WebSocket) run() (err error) {
 				log.Printf("Closing session: %s", err)
 				return nil
 			}
-			break
 		}
 	}
 }
@@ -164,7 +153,7 @@ func readMessage(ws *websocket.Conn) ([]byte, error) {
 	}()
 	select {
 	case <-ctx.Done():
-		return nil, ErrNoHeartbeat{timeout: timeout}
+		return nil, fmt.Errorf("No heartbeat was sent for the past %v", timeout)
 	case res := <-resCh:
 		return res.data, res.err
 	}
@@ -184,4 +173,54 @@ func (w *WebSocket) WriteJSON(v interface{}) error {
 
 func (w *WebSocket) Close() error {
 	return w.Connection.Close()
+}
+
+// REFACTOR START
+
+var (
+	validSessionChars = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
+	validServerChars  = []byte("0123456789")
+)
+
+func genRandomString(chars []byte, length int) string {
+	if length == 0 {
+		return ""
+	}
+	clen := len(chars)
+	if clen < 2 || clen > 256 {
+		panic("bad charset")
+	}
+	maxrb := 255 - (256 % clen)
+	b := make([]byte, length)
+	r := make([]byte, length+(length/4)) // storage for random bytes.
+	i := 0
+	for {
+		if _, err := rand.Read(r); err != nil {
+			panic("error reading random bytes: " + err.Error())
+		}
+		for _, rb := range r {
+			c := int(rb)
+			if c > maxrb {
+				// Skip this number to avoid modulo bias.
+				continue
+			}
+			b[i] = chars[c%clen]
+			i++
+			if i == length {
+				return string(b)
+			}
+		}
+	}
+}
+
+// GenerateSessionID generates a new SessionID
+// May panic if it fails to read from crypto/rand.
+func GenerateSessionID() string {
+	return genRandomString(validSessionChars, 16)
+}
+
+// GenerateServerID generates a new ServerID.
+// May panic if it fails to read from crypto/rand
+func GenerateServerID() string {
+	return genRandomString(validServerChars, 3)
 }

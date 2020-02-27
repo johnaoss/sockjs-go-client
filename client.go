@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// Client represents the SockJS client.
 type Client struct {
 	Connection Connection
 
@@ -19,23 +20,24 @@ type Client struct {
 }
 
 func NewClient(address string) (*Client, error) {
-	client := &Client{}
-
-	client.Address = address
+	client := &Client{
+		Address: address,
+	}
 
 	// Get info whether WebSockets are enabled
 	info, err := client.Info()
 	if err != nil {
 		return nil, err
 	}
+
 	client.WebSockets = info.WebSocket
 
-	// Create a WS session (not a SJS one)
+	// Create a Raw Websocket session (not a SockJS one)
 	if client.WebSockets {
-		a2 := strings.Replace(address, "https", "wss", 1)
-		a2 = strings.Replace(a2, "http", "ws", 1)
+		newAddr := strings.Replace(address, "https", "wss", 1)
+		newAddr = strings.Replace(newAddr, "http", "ws", 1)
 
-		ws, err := NewWebSocket(a2)
+		ws, err := NewWebSocket(newAddr)
 		if err != nil {
 			return nil, err
 		}
@@ -44,7 +46,7 @@ func NewClient(address string) (*Client, error) {
 		client.Reconnected = ws.Reconnected
 		client.ConnectionLost = ws.ConnectionLost
 	} else {
-		// XHR
+		// Otherwise we're doing XHR Polling
 		client.Connection, err = NewXHR(address)
 		if err != nil {
 			return nil, err
@@ -54,6 +56,7 @@ func NewClient(address string) (*Client, error) {
 	return client, nil
 }
 
+// Info returns the necessary information about a Client
 func (c *Client) Info() (*Info, error) {
 	resp, err := http.Get(c.Address + "/info")
 	if err != nil {
