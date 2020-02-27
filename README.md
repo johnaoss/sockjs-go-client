@@ -12,6 +12,6 @@ Is currently untested, but I plan on changing that.
 
 ## License
 
-This project is a fork of another project. Their license can be found in LICENSE_ORIGINAL.md.
+This project is a fork [third-light/sockjs-go-client](https://github.com/third-light/sockjs-go-client).
 
-The current license of the project can be found at LICENSE.md
+The current license of the project can be found at LICENSE.md.
