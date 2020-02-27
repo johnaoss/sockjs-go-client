@@ -1,4 +1,4 @@
-# sockjs-go-client
+# sockjs-go-client ![Go](https://github.com/johnaoss/sockjs-go-client/workflows/Go/badge.svg?branch=master)
 
 This package is a Go client for SockJS websocket servers.
 
